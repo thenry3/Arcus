@@ -8,6 +8,7 @@ import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.StrictMode;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.widget.ImageView;
@@ -17,20 +18,20 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.google.api.client.extensions.android.http.AndroidHttp;
+import com.google.api.client.extensions.android.json.AndroidJsonFactory;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.http.HttpTransport;
+import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
-import com.google.cloud.vision.v1.AnnotateImageRequest;
-import com.google.cloud.vision.v1.AnnotateImageResponse;
-import com.google.cloud.vision.v1.BatchAnnotateImagesRequest;
-import com.google.cloud.vision.v1.BatchAnnotateImagesResponse;
-import com.google.cloud.vision.v1.EntityAnnotation;
-import com.google.cloud.vision.v1.Feature;
-import com.google.cloud.vision.v1.Feature.Type;
-import com.google.cloud.vision.v1.Image;
-import com.google.cloud.vision.v1.ImageAnnotatorClient;
-import com.google.protobuf.ByteString;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.services.translate.Translate;
+import com.google.api.services.translate.model.TranslationsListResponse;
+import com.google.api.services.vision.v1.model.*;
+import com.google.api.services.vision.v1.*;
 
 public class Review extends AppCompatActivity {
+    private static final String CLOUD_VISION_API_KEY = BuildConfig.VISION_KEY;
     private String toLang;
     private String fromLang;
     private int imgMode;
@@ -72,28 +73,60 @@ public class Review extends AppCompatActivity {
         new AsyncTask<Object, Void, BatchAnnotateImagesResponse>(){
             @Override
             protected BatchAnnotateImagesResponse doInBackground(Object... params){
-                List<AnnotateImageRequest> requests = new ArrayList<>();
-                List<Feature> featureList = new ArrayList<>();
+                try{
+                    HttpTransport httpTransport = AndroidHttp.newCompatibleTransport();
+                    JsonFactory jsonFactory = GsonFactory.getDefaultInstance();
 
-                Image img = getBase64EncodedJpeg(bitmap);
 
-                Feature label = Feature.newBuilder().setType(Type.LABEL_DETECTION).build();
-                Feature obj = Feature.newBuilder().setType(Type.OBJECT_LOCALIZATION).build();
-                Feature text = Feature.newBuilder().setType(Type.TEXT_DETECTION).build();
-                featureList.add(label);
-                featureList.add(obj);
-                featureList.add(text);
+                    VisionRequestInitializer requestInitializer =
+                            new VisionRequestInitializer(CLOUD_VISION_API_KEY);
 
-                AnnotateImageRequest request =
-                        AnnotateImageRequest.newBuilder().addAllFeatures(featureList).setImage(img).build();
-                requests.add(request);
 
-                try (ImageAnnotatorClient client = ImageAnnotatorClient.create()) {
-                    BatchAnnotateImagesResponse response = client.batchAnnotateImages(requests);
+                    Vision.Builder builder = new Vision.Builder
+                            (httpTransport, jsonFactory, null);
+                    builder.setVisionRequestInitializer(requestInitializer);
+                    Vision vision = builder.build();
+
+                    List<Feature> featureList = new ArrayList<>();
+                    Feature labelDetection = new Feature();
+                    labelDetection.setType("LABEL_DETECTION");
+                    labelDetection.setMaxResults(10);
+                    featureList.add(labelDetection);
+
+                    Feature objectLocalization = new Feature();
+                    objectLocalization.setType("OBJECT_LOCALIZATION");
+                    objectLocalization.setMaxResults(10);
+                    featureList.add(objectLocalization);
+
+                    Feature textDetection = new Feature();
+                    textDetection.setType("TEXT_DETECTION");
+                    textDetection.setMaxResults(10);
+                    featureList.add(textDetection);
+
+                    List<AnnotateImageRequest> imageList = new ArrayList<>();
+                    AnnotateImageRequest annotateImageRequest = new AnnotateImageRequest();
+                    Image base64EncodedImage = getBase64EncodedJpeg(bitmap);
+                    annotateImageRequest.setImage(base64EncodedImage);
+                    annotateImageRequest.setFeatures(featureList);
+                    imageList.add(annotateImageRequest);
+
+                    BatchAnnotateImagesRequest batchAnnotateImagesRequest =
+                            new BatchAnnotateImagesRequest();
+                    batchAnnotateImagesRequest.setRequests(imageList);
+
+                    Vision.Images.Annotate annotateRequest =
+                            vision.images().annotate(batchAnnotateImagesRequest);
+                    annotateRequest.setDisableGZipContent(true);
+                    Log.d("oop", "Sending request to Google Cloud");
+
+                    BatchAnnotateImagesResponse response = annotateRequest.execute();
                     return response;
-                } catch (Exception e) {
-                    return null;
+                } catch (GoogleJsonResponseException e) {
+                    Log.e("oop", "Request error: " + e.getContent());
+                } catch (IOException e) {
+                    Log.d("oop", "Request error: " + e.getMessage());
                 }
+                return null;
             }
             protected void onPostExecute(BatchAnnotateImagesResponse response) {
 //                labelResults.setText(getDetectedLabels(response));
@@ -101,12 +134,44 @@ public class Review extends AppCompatActivity {
         }.execute();
     }
 
+    private class Translator {
+
+        private ArrayList<String> translate(ArrayList<String> arr, String tar) throws IOException {
+            StrictMode.ThreadPolicy policy = new StrictMode.ThreadPolicy.Builder().permitAll().build();
+            StrictMode.setThreadPolicy(policy);
+            String key = BuildConfig.TRANS_KEY;
+            // Set up the HTTP transport and JSON factory
+            HttpTransport httpTransport = new NetHttpTransport();
+            JsonFactory jsonFactory = AndroidJsonFactory.getDefaultInstance();
+            Translate.Builder translateBuilder = new Translate.Builder(httpTransport, jsonFactory, null);
+            translateBuilder.setApplicationName(getString(R.string.app_name));
+            Translate translate = translateBuilder.build();
+            ArrayList<String> q = arr;
+            ArrayList<String> responseList = new ArrayList<>();
+            for(int i = 0; i < q.size(); i++)
+            {
+                Translate.Translations.List list = translate.translations().list(q, tar);
+                list.setKey(key);
+                list.setSource("en");
+                TranslationsListResponse translateResponse = list.execute();
+                String response = translateResponse.getTranslations().get(i).getTranslatedText();
+                responseList.add(response);
+            }
+            for (int i = 0; i < responseList.size(); i++)
+            {
+                Log.d("oop", responseList.get(i));
+            }
+            return responseList;
+        }
+    }
+
     public Image getBase64EncodedJpeg(Bitmap bitmap) {
+        Image image = new Image();
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, byteArrayOutputStream);
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
         byte[] imageBytes = byteArrayOutputStream.toByteArray();
-        ByteString byteString = ByteString.copyFrom(imageBytes);
-        return Image.newBuilder().setContent(byteString).build();
+        image.encodeContent(imageBytes);
+        return image;
     }
 
     private String getLangCode(String language) {
