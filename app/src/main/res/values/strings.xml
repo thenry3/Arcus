@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">Arcus</string>
+
+    <string name="title_activity_feed">feed</string>
+    <string name="dummy_button">Dummy Button</string>
+    <string name="dummy_content">DUMMY\nCONTENT</string>
+
+    <string name="title_activity_fullscreen">FullscreenActivity</string>
+</resources>
