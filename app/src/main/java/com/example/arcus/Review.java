@@ -11,12 +11,17 @@ import android.os.Bundle;
 import android.os.StrictMode;
 import android.provider.MediaStore;
 import android.util.Log;
+import android.util.Pair;
+import android.view.View;
 import android.widget.ImageView;
+import android.widget.TextView;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 import com.bumptech.glide.Glide;
 import com.google.api.client.extensions.android.http.AndroidHttp;
@@ -31,12 +36,18 @@ import com.google.api.services.translate.model.TranslationsListResponse;
 import com.google.api.services.vision.v1.model.*;
 import com.google.api.services.vision.v1.*;
 
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.DefaultHttpClient;
+
+
 public class Review extends AppCompatActivity {
     private static final String CLOUD_VISION_API_KEY = BuildConfig.VISION_KEY;
     private String toLang;
     private String fromLang;
     private String toLangCode;
     private String fromLangCode;
+    private Uri imgUri;
     Bitmap imgBitmap;
 
     @Override
@@ -48,6 +59,7 @@ public class Review extends AppCompatActivity {
         if (extras != null) {
             toLang = (String) extras.get("toLang");
             fromLang = (String) extras.get("fromLang");
+            imgUri = (Uri) extras.get("image");
             try {
                 imgBitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), (Uri) extras.get("image"));
             } catch (Exception e) {
@@ -60,11 +72,11 @@ public class Review extends AppCompatActivity {
         fromLangCode = getLangCode(fromLang);
         ImageView imgView = findViewById(R.id.chosenImg);
         Glide.with(this).load((Uri) extras.get("image")).into(imgView);
-//        callCloudVision(imgBitmap);
+        callCloudVision(imgBitmap, toLangCode, fromLangCode);
     }
 
     @SuppressLint("StaticFieldLeak")
-    public void callCloudVision(final Bitmap bitmap){
+    public void callCloudVision(final Bitmap bitmap, final String toLangCode, final String fromLangCode){
 
         new AsyncTask<Object, Void, BatchAnnotateImagesResponse>(){
             @Override
@@ -125,9 +137,65 @@ public class Review extends AppCompatActivity {
                 return null;
             }
             protected void onPostExecute(BatchAnnotateImagesResponse response) {
-//                labelResults.setText(getDetectedLabels(response));
+                Pair<List<String>, List<String>> translations = getLabels(response, fromLangCode, toLangCode);
+                TextView titleView = findViewById(R.id.titleView);
+                titleView.setText(fromLang + " -----> " + toLang);
+
+                List<String> fromTranslations = translations.first;
+                List<String> toTranslations = translations.second;
+
+                StringBuilder Fmessage = new StringBuilder("");
+                StringBuilder Tmessage = new StringBuilder("");
+
+                for (int i = 0; i < fromTranslations.size(); i++) {
+                    Fmessage.append(fromTranslations.get(i));
+                    Tmessage.append(toTranslations.get(i));
+                    Fmessage.append("\n\n");
+                    Tmessage.append("\n\n");
+                }
+
+                ((TextView) findViewById(R.id.listFrom)).setText(Fmessage);
+                ((TextView) findViewById(R.id.listTo)).setText(Tmessage);
             }
         }.execute();
+    }
+
+    private Pair<List<String>, List<String>> getLabels(BatchAnnotateImagesResponse response, String fromLangCode, String toLangCode) {
+        if (response == null){
+            return null;
+        }
+        List<EntityAnnotation> labels = response.getResponses().get(0).getLabelAnnotations();
+        ArrayList<String> words = new ArrayList<>();
+        if (labels != null) {
+            for (EntityAnnotation label : labels) {
+                words.add(label.getDescription());
+            }
+        } else {
+            return null;
+        }
+        Translator t = new Translator();
+        try{
+            ArrayList<String> fTranslations = fromLangCode != "en" ? t.translate(words, fromLangCode): words;
+            ArrayList<String> tTranslations = toLangCode != "en" ? t.translate(words, toLangCode) : words;
+            if (labels != null) {
+                return new Pair<List<String>, List<String>>(fTranslations, tTranslations);
+            } else {
+                return null;
+            }
+        } catch (IOException e){
+            Log.e("asdf", e.toString());
+        }
+        return null;
+    }
+
+    public void onPostClick(View v) {
+        String url = "";
+        HttpClient httpclient = new DefaultHttpClient();
+        HttpPost httppost = new HttpPost(url);
+        httppost.addHeader("Accept", "application/json");
+        httppost.addHeader("Content-type", "multipart/form-data");
+
+        File fileToUse = new File(imgUri.getPath());
     }
 
     private class Translator {
@@ -164,7 +232,7 @@ public class Review extends AppCompatActivity {
     public Image getBase64EncodedJpeg(Bitmap bitmap) {
         Image image = new Image();
         ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 70, byteArrayOutputStream);
         byte[] imageBytes = byteArrayOutputStream.toByteArray();
         image.encodeContent(imageBytes);
         return image;

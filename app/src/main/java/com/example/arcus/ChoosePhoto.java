@@ -11,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -41,14 +42,10 @@ public class ChoosePhoto extends AppCompatActivity {
         fSpinner.setAdapter(Adapter);
         tSpinner.setAdapter(Adapter);
 
-        AdapterView.OnItemSelectedListener langListener = new AdapterView.OnItemSelectedListener() {
+        AdapterView.OnItemSelectedListener FlangListener = new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                String language = (String) parent.getItemAtPosition(position);
-                if (id == R.id.from_lang_spinner)
-                    fromLang = language;
-                else if (id == R.id.to_lang_spinner)
-                    toLang = language;
+                fromLang = (String) parent.getItemAtPosition(position);
             }
 
             @Override
@@ -57,8 +54,20 @@ public class ChoosePhoto extends AppCompatActivity {
             }
         };
 
-        fSpinner.setOnItemSelectedListener(langListener);
-        tSpinner.setOnItemSelectedListener(langListener);
+        AdapterView.OnItemSelectedListener TlangListener = new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                toLang = (String) parent.getItemAtPosition(position);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+
+            }
+        };
+
+        fSpinner.setOnItemSelectedListener(FlangListener);
+        tSpinner.setOnItemSelectedListener(TlangListener);
     }
 
     public void onCamClick(View v) {
