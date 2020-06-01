@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.bumptech.glide.Glide;
 import com.google.api.client.extensions.android.http.AndroidHttp;
 import com.google.api.client.extensions.android.json.AndroidJsonFactory;
 import com.google.api.client.googleapis.json.GoogleJsonResponseException;
@@ -34,7 +35,6 @@ public class Review extends AppCompatActivity {
     private static final String CLOUD_VISION_API_KEY = BuildConfig.VISION_KEY;
     private String toLang;
     private String fromLang;
-    private int imgMode;
     private String toLangCode;
     private String fromLangCode;
     Bitmap imgBitmap;
@@ -48,23 +48,19 @@ public class Review extends AppCompatActivity {
         if (extras != null) {
             toLang = (String) extras.get("toLang");
             fromLang = (String) extras.get("fromLang");
-            imgMode = (int) extras.get("imageMode");
-            if (imgMode == 1)
-                imgBitmap = (Bitmap) extras.get("image");
-            else {
-                try {
-                    imgBitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), (Uri) extras.get("image"));
-                } catch (Exception e) {
+            try {
+                imgBitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), (Uri) extras.get("image"));
+            } catch (Exception e) {
 
-                }
             }
+
         }
 
         toLangCode = getLangCode(toLang);
         fromLangCode = getLangCode(fromLang);
         ImageView imgView = findViewById(R.id.chosenImg);
-        imgView.setImageBitmap(imgBitmap);
-        callCloudVision(imgBitmap);
+        Glide.with(this).load((Uri) extras.get("image")).into(imgView);
+//        callCloudVision(imgBitmap);
     }
 
     @SuppressLint("StaticFieldLeak")

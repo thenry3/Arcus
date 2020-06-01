@@ -5,6 +5,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.content.ContentValues;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -16,11 +17,14 @@ import android.widget.ArrayAdapter;
 import android.widget.Spinner;
 import android.graphics.Bitmap;
 
+import java.io.ByteArrayOutputStream;
+
 public class ChoosePhoto extends AppCompatActivity {
     static final int REQUEST_IMAGE_CAPTURE = 1;
     static final int GALLERY_REQUEST_CODE = 2;
     private String toLang = "Afrikaans";
     private String fromLang = "Afrikaans";
+    private Uri imgUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,36 +64,34 @@ public class ChoosePhoto extends AppCompatActivity {
     public void onCamClick(View v) {
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Images.Media.TITLE, "New Picture");
+            values.put(MediaStore.Images.Media.DESCRIPTION, "From your Camera");
+            Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            imgUri = getContentResolver().insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+            intent.putExtra(MediaStore.EXTRA_OUTPUT, imgUri);
+            startActivityForResult(intent, REQUEST_IMAGE_CAPTURE);
         }
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         int imgMode = 1;
-        Bitmap imageBitmap = null;
-        Uri imageUri = null;
-        if (requestCode == REQUEST_IMAGE_CAPTURE && resultCode == RESULT_OK) {
-            Bundle extras = data.getExtras();
-            imageBitmap = (Bitmap) extras.get("data");
-        }
-        else if (requestCode == GALLERY_REQUEST_CODE && resultCode == RESULT_OK) {
-            imageUri = data.getData();
+        if (resultCode != RESULT_OK)
+            return;
+        if (requestCode == GALLERY_REQUEST_CODE && resultCode == RESULT_OK) {
+            imgUri = data.getData();
             imgMode = 0;
         }
 
-
-
-        if (imageBitmap != null || imageUri != null) {
+        if (imgUri != null) {
 
             Intent intent = new Intent(this, Review.class);
             intent.putExtra("toLang", toLang);
             intent.putExtra("fromLang", fromLang);
             intent.putExtra("imageMode", imgMode);
-            if (imgMode == 1)
-                intent.putExtra("image", imageBitmap);
-            else
-                intent.putExtra("image", imageUri);
+            intent.putExtra("image", imgUri);
 
             startActivity(intent);
         }
